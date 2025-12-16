@@ -6,8 +6,7 @@ from nltk.stem.porter import PorterStemmer
 from nltk.corpus import stopwords
 import string
 import nltk
-nltk.download('stopwords')
-nltk.download('punkt')
+import re
 
 # Ensure the "logs" directory exists
 log_dir = 'logs'
@@ -31,6 +30,24 @@ file_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 logger.addHandler(file_handler)
 
+# Ensure required NLTK resources are available; download if missing
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords')
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+try:
+    nltk.data.find('tokenizers/punkt_tab')
+except LookupError:
+    # punkt_tab is uncommon; attempt to download but don't fail if unavailable
+    try:
+        nltk.download('punkt_tab')
+    except Exception:
+        logger.debug('NLTK resource "punkt_tab" unavailable; will use fallback tokenizer')
+
 def transform_text(text):
     """
     Transforms the input text by converting it to lowercase, tokenizing, removing stopwords and punctuation, and stemming.
@@ -38,10 +55,14 @@ def transform_text(text):
     ps = PorterStemmer()
     # Convert to lowercase
     text = text.lower()
-    # Tokenize the text
-    text = nltk.word_tokenize(text)
+    # Tokenize the text (fall back to regex if NLTK tokenizer is missing)
+    try:
+        tokens = nltk.word_tokenize(text)
+    except LookupError:
+        logger.warning('NLTK tokenizer resource missing; using regex fallback')
+        tokens = re.findall(r"\b\w+\b", text.lower())
     # Remove non-alphanumeric tokens
-    text = [word for word in text if word.isalnum()]
+    text = [word for word in tokens if word.isalnum()]
     # Remove stopwords and punctuation
     text = [word for word in text if word not in stopwords.words('english') and word not in string.punctuation]
     # Stem the words
